@@ -3,20 +3,28 @@ package com.libmanage.client;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.libmanage.dto.BookDTO;
+import com.libmanage.dto.DepartmentDto;
+import com.libmanage.dto.EmployeeDetailsDto;
+import com.libmanage.dto.EmployeeDto;
 import com.libmanage.dto.RegisterRequest;
-import com.libmanage.dto.ReservationDTO;
+import com.libmanage.dto.SalaryAdjustmentRequest;
+import com.libmanage.dto.SalaryDto;
 import com.libmanage.dto.UserDTO;
+import org.jdatepicker.impl.JDatePanelImpl;
+import org.jdatepicker.impl.JDatePickerImpl;
+import org.jdatepicker.impl.UtilDateModel;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.util.List;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.Base64;
+import java.util.Properties;
 import java.util.Scanner;
 
 public class SwingAuthApp {
@@ -98,8 +106,8 @@ public class SwingAuthApp {
             if (authenticate(username, password)) {
                 userLabel.setText(getUserStatus());
                 loginDialog.dispose();
-                if ("Читатель".equals(currentRole)) {
-                    setupReaderPanel();
+                if ("Сотрудник".equals(currentRole)) {
+                    setupEmployeePanel();
                 } else if ("Администратор".equals(currentRole)) {
                     setupAdminPanel();
                 }
@@ -119,21 +127,642 @@ public class SwingAuthApp {
         loginDialog.setVisible(true);
     }
 
-    private void setupAdminPanel() {
+    private void setupEmployeePanel() {
         buttonPanel.removeAll();
 
-        JButton allUsersButton = new JButton("View All Users");
-        allUsersButton.addActionListener(e -> fetchAllUsers());
+        JButton pastSalariesButton = new JButton("История выплат");
+        pastSalariesButton.addActionListener(e -> fetchPastSalaries());
 
-        JButton allReservationsButton = new JButton("View All Reservations");
-        allReservationsButton.addActionListener(e -> fetchAllReservations());
+        JButton nextSalaryButton = new JButton("Следующая выплата");
+        nextSalaryButton.addActionListener(e -> fetchNextSalary());
 
-        buttonPanel.add(allUsersButton);
-        buttonPanel.add(allReservationsButton);
+        buttonPanel.add(pastSalariesButton);
+        buttonPanel.add(nextSalaryButton);
 
         buttonPanel.revalidate();
         buttonPanel.repaint();
     }
+
+    private void fetchPastSalaries() {
+        try {
+            HttpURLConnection conn = createConnectionWithAuth("http://localhost:8080/employees/salaries/past", "GET");
+
+            if (conn.getResponseCode() == 200) {
+                Scanner scanner = new Scanner(conn.getInputStream()).useDelimiter("\\A");
+                String response = scanner.hasNext() ? scanner.next() : "";
+
+                ObjectMapper mapper = new ObjectMapper();
+                mapper.registerModule(new JavaTimeModule());
+                SalaryDto[] pastSalaries = mapper.readValue(response, SalaryDto[].class);
+
+                updatePastSalariesTable(pastSalaries);
+            } else {
+                JOptionPane.showMessageDialog(frame, "Не удалось получить историю выплат. Код ошибки: " + conn.getResponseCode(), "Ошибка", JOptionPane.ERROR_MESSAGE);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void updatePastSalariesTable(SalaryDto[] pastSalaries) {
+        tableModel.setRowCount(0);
+        tableModel.setColumnIdentifiers(new String[]{"Дата", "Сумма", "Бонус"});
+
+        for (SalaryDto salary : pastSalaries) {
+            tableModel.addRow(new Object[]{
+                    salary.getPaymentDate(),
+                    salary.getAmount(),
+                    salary.getBonus()
+            });
+        }
+    }
+
+    private void fetchNextSalary() {
+        try {
+            HttpURLConnection conn = createConnectionWithAuth("http://localhost:8080/employees/salaries/next", "GET");
+
+            if (conn.getResponseCode() == 200) {
+                Scanner scanner = new Scanner(conn.getInputStream()).useDelimiter("\\A");
+                String response = scanner.hasNext() ? scanner.next() : "";
+
+                ObjectMapper mapper = new ObjectMapper();
+                mapper.registerModule(new JavaTimeModule());
+                SalaryDto nextSalary = mapper.readValue(response, SalaryDto.class);
+
+                showNextSalaryDialog(nextSalary);
+            } else {
+                JOptionPane.showMessageDialog(frame, "Не удалось получить следующую выплату. Код ошибки: " + conn.getResponseCode(), "Ошибка", JOptionPane.ERROR_MESSAGE);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void showNextSalaryDialog(SalaryDto nextSalary) {
+        JDialog nextSalaryDialog = new JDialog(frame, "Следующая выплата", true);
+        nextSalaryDialog.setSize(400, 200);
+        nextSalaryDialog.setLayout(new GridLayout(3, 2));
+
+        nextSalaryDialog.add(new JLabel("Дата:"));
+        nextSalaryDialog.add(new JLabel(nextSalary.getPaymentDate().toString()));
+
+        nextSalaryDialog.add(new JLabel("Сумма:"));
+        nextSalaryDialog.add(new JLabel(String.format("%.2f", nextSalary.getAmount())));
+
+        nextSalaryDialog.add(new JLabel("Бонус:"));
+        nextSalaryDialog.add(new JLabel(String.format("%.2f", nextSalary.getBonus())));
+
+        nextSalaryDialog.setVisible(true);
+    }
+
+
+
+
+
+    private void setupAdminPanel() {
+        buttonPanel.removeAll();
+
+        JButton createEmployeeButton = new JButton("Create Employee");
+        createEmployeeButton.addActionListener(e -> showCreateEmployeeDialog());
+
+        JButton viewEmployeesButton = new JButton("View Employees");
+        viewEmployeesButton.addActionListener(e -> showEmployeeFilterDialog());
+
+        JButton viewDepartmentsButton = new JButton("View Departments");
+        viewDepartmentsButton.addActionListener(e -> fetchDepartments());
+
+        buttonPanel.add(createEmployeeButton);
+        buttonPanel.add(viewEmployeesButton);
+        buttonPanel.add(viewDepartmentsButton);
+
+        buttonPanel.revalidate();
+        buttonPanel.repaint();
+    }
+
+    private void fetchDepartments() {
+        try {
+            String urlString = "http://localhost:8080/departments";
+            HttpURLConnection conn = createConnectionWithAuth(urlString, "GET");
+
+            if (conn.getResponseCode() == 200) {
+                Scanner scanner = new Scanner(conn.getInputStream()).useDelimiter("\\A");
+                String response = scanner.hasNext() ? scanner.next() : "";
+
+                ObjectMapper mapper = new ObjectMapper();
+                DepartmentDto[] departments = mapper.readValue(response, DepartmentDto[].class);
+
+                updateDepartmentTable(departments);
+            } else {
+                JOptionPane.showMessageDialog(frame, "Failed to fetch departments. Error: " + conn.getResponseCode(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void updateDepartmentTable(DepartmentDto[] departments) {
+        tableModel.setRowCount(0);
+        tableModel.setColumnIdentifiers(new String[]{"ID", "Name", "Employee Count", "Average Salary", "Adjust Salaries", "Set Next Salary"});
+
+        for (DepartmentDto department : departments) {
+            tableModel.addRow(new Object[]{
+                    department.getId(),
+                    department.getName(),
+                    department.getEmployeeCount(),
+                    String.format("%.2f", department.getAverageSalary()),
+                    "Adjust Salaries",
+                    "Set Next Salary"
+            });
+        }
+
+        // Колонка для изменения зарплат
+        resultTable.getColumn("Adjust Salaries").setCellRenderer((table, value, isSelected, hasFocus, row, column) -> {
+            JButton button = new JButton(value.toString());
+            button.addActionListener(e -> showAdjustSalaryDialog((int) tableModel.getValueAt(row, 0)));
+            return button;
+        });
+
+        resultTable.getColumn("Adjust Salaries").setCellEditor(new DefaultCellEditor(new JCheckBox()) {
+            @Override
+            public Component getTableCellEditorComponent(JTable table, Object value, boolean isSelected, int row, int column) {
+                JButton button = new JButton(value.toString());
+                button.addActionListener(e -> showAdjustSalaryDialog((int) tableModel.getValueAt(row, 0)));
+                return button;
+            }
+        });
+
+        // Колонка для назначения следующей зарплаты
+        resultTable.getColumn("Set Next Salary").setCellRenderer((table, value, isSelected, hasFocus, row, column) -> {
+            JButton button = new JButton(value.toString());
+            button.addActionListener(e -> showSalaryDateDialog((int) tableModel.getValueAt(row, 0)));
+            return button;
+        });
+
+        resultTable.getColumn("Set Next Salary").setCellEditor(new DefaultCellEditor(new JCheckBox()) {
+            @Override
+            public Component getTableCellEditorComponent(JTable table, Object value, boolean isSelected, int row, int column) {
+                JButton button = new JButton(value.toString());
+                button.addActionListener(e -> showSalaryDateDialog((int) tableModel.getValueAt(row, 0)));
+                return button;
+            }
+        });
+    }
+
+    private void showSalaryDateDialog(int departmentId) {
+        JDialog salaryDateDialog = new JDialog(frame, "Set Next Salary Date", true);
+        salaryDateDialog.setSize(300, 200);
+        salaryDateDialog.setLayout(new GridLayout(2, 1));
+
+        JPanel datePickerPanel = new JPanel();
+        JLabel label = new JLabel("Select Date:");
+        JDatePickerImpl datePicker = createDatePicker(); // Метод для создания календаря
+        datePickerPanel.add(label);
+        datePickerPanel.add(datePicker);
+
+        JButton submitButton = new JButton("Submit");
+        submitButton.addActionListener(e -> {
+            LocalDate selectedDate = LocalDate.of(
+                    datePicker.getModel().getYear(),
+                    datePicker.getModel().getMonth() + 1,
+                    datePicker.getModel().getDay()
+            );
+            assignSalaryDate(departmentId, selectedDate);
+            salaryDateDialog.dispose();
+        });
+
+        salaryDateDialog.add(datePickerPanel);
+        salaryDateDialog.add(submitButton);
+
+        salaryDateDialog.setVisible(true);
+    }
+
+    private JDatePickerImpl createDatePicker() {
+        Properties i18nStrings = new Properties();
+        i18nStrings.put("text.today", "Today");
+        i18nStrings.put("text.month", "Month");
+        i18nStrings.put("text.year", "Year");
+
+        UtilDateModel model = new UtilDateModel();
+        JDatePanelImpl datePanel = new JDatePanelImpl(model, i18nStrings);
+
+        JFormattedTextField.AbstractFormatter formatter = new JFormattedTextField.AbstractFormatter() {
+            @Override
+            public Object stringToValue(String text) throws java.text.ParseException {
+                return java.time.LocalDate.parse(text);
+            }
+
+            @Override
+            public String valueToString(Object value) throws java.text.ParseException {
+                if (value != null) {
+                    return value.toString();
+                }
+                return "";
+            }
+        };
+
+        return new JDatePickerImpl(datePanel, formatter);
+    }
+
+
+    private void assignSalaryDate(int departmentId, LocalDate paymentDate) {
+        try {
+            URL url = new URL("http://localhost:8080/departments/" + departmentId + "/assign-salary-date?paymentDate=" + paymentDate);
+            HttpURLConnection conn = createConnectionWithAuth(url.toString(), "POST");
+
+            if (conn.getResponseCode() == 200) {
+                JOptionPane.showMessageDialog(frame, "Salary date assigned successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(frame, "Failed to assign salary date. Error: " + conn.getResponseCode(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+
+
+
+    private void showAdjustSalaryDialog(int departmentId) {
+        JDialog adjustSalaryDialog = new JDialog(frame, "Adjust Salaries", true);
+        adjustSalaryDialog.setSize(300, 200);
+        adjustSalaryDialog.setLayout(new GridLayout(3, 2));
+
+        JLabel factorLabel = new JLabel("Adjustment Factor:");
+        JTextField factorField = new JTextField();
+        JButton submitButton = new JButton("Submit");
+
+        submitButton.addActionListener(e -> {
+            double adjustmentFactor = Double.parseDouble(factorField.getText());
+            adjustSalaries(departmentId, adjustmentFactor);
+            adjustSalaryDialog.dispose();
+        });
+
+        adjustSalaryDialog.add(factorLabel);
+        adjustSalaryDialog.add(factorField);
+        adjustSalaryDialog.add(new JLabel());
+        adjustSalaryDialog.add(submitButton);
+
+        adjustSalaryDialog.setVisible(true);
+    }
+
+    private void adjustSalaries(int departmentId, double adjustmentFactor) {
+        try {
+            URL url = new URL("http://localhost:8080/departments/" + departmentId + "/adjust-salaries");
+            HttpURLConnection conn = createConnectionWithAuth(url.toString(), "PUT");
+            conn.setDoOutput(true);
+
+            // Создаем объект для тела запроса
+            SalaryAdjustmentRequest request = new SalaryAdjustmentRequest();
+            request.setAdjustmentFactor(adjustmentFactor);
+
+            // Используем ObjectMapper для преобразования в JSON
+            ObjectMapper mapper = new ObjectMapper();
+            String requestBody = mapper.writeValueAsString(request);
+
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(requestBody.getBytes(StandardCharsets.UTF_8));
+            }
+
+            if (conn.getResponseCode() == 200) {
+                JOptionPane.showMessageDialog(frame, "Salaries adjusted successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+                fetchDepartments(); // Обновляем таблицу
+            } else {
+                JOptionPane.showMessageDialog(frame, "Failed to adjust salaries. Error: " + conn.getResponseCode(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+
+    private void showEmployeeFilterDialog() {
+        JDialog filterDialog = new JDialog(frame, "Filter Employees", true);
+        filterDialog.setSize(400, 200);
+        filterDialog.setLayout(new GridLayout(2, 2));
+
+        JLabel departmentLabel = new JLabel("Department ID (Optional):");
+        JTextField departmentField = new JTextField();
+        JButton fetchButton = new JButton("Fetch Employees");
+
+        fetchButton.addActionListener(e -> {
+            String departmentId = departmentField.getText();
+            fetchEmployees(departmentId.isEmpty() ? null : Integer.parseInt(departmentId));
+            filterDialog.dispose();
+        });
+
+        filterDialog.add(departmentLabel);
+        filterDialog.add(departmentField);
+        filterDialog.add(new JLabel());
+        filterDialog.add(fetchButton);
+
+        filterDialog.setVisible(true);
+    }
+
+    private void fetchEmployees(Integer departmentId) {
+        try {
+            String urlString = "http://localhost:8080/employees";
+            if (departmentId != null) {
+                urlString += "?departmentId=" + departmentId;
+            }
+            HttpURLConnection conn = createConnectionWithAuth(urlString, "GET");
+
+            if (conn.getResponseCode() == 200) {
+                Scanner scanner = new Scanner(conn.getInputStream()).useDelimiter("\\A");
+                String response = scanner.hasNext() ? scanner.next() : "";
+
+                ObjectMapper mapper = new ObjectMapper();
+                EmployeeDto[] employees = mapper.readValue(response, EmployeeDto[].class);
+
+                updateEmployeeTable(employees);
+            } else {
+                JOptionPane.showMessageDialog(frame, "Failed to fetch employees. Error: " + conn.getResponseCode(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void updateEmployeeTable(EmployeeDto[] employees) {
+        tableModel.setRowCount(0);
+        tableModel.setColumnIdentifiers(new String[]{"ID", "Username", "Department", "Salary", "Active", "Transfer", "Details"});
+
+        for (EmployeeDto employee : employees) {
+            tableModel.addRow(new Object[]{
+                    employee.getId(),
+                    employee.getUsername(),
+                    employee.getDepartmentName(),
+                    employee.getSalary(),
+                    employee.getActive(),
+                    "Transfer",
+                    "Details"
+            });
+        }
+
+        // Кнопка "Transfer"
+        resultTable.getColumn("Transfer").setCellRenderer((table, value, isSelected, hasFocus, row, column) -> {
+            JButton button = new JButton(value.toString());
+            button.addActionListener(e -> showTransferDialog((int) tableModel.getValueAt(row, 0)));
+            return button;
+        });
+
+        resultTable.getColumn("Transfer").setCellEditor(new DefaultCellEditor(new JCheckBox()) {
+            @Override
+            public Component getTableCellEditorComponent(JTable table, Object value, boolean isSelected, int row, int column) {
+                JButton button = new JButton(value.toString());
+                button.addActionListener(e -> showTransferDialog((int) tableModel.getValueAt(row, 0)));
+                return button;
+            }
+        });
+
+        // Кнопка "Details"
+        resultTable.getColumn("Details").setCellRenderer((table, value, isSelected, hasFocus, row, column) -> {
+            JButton button = new JButton(value.toString());
+            button.addActionListener(e -> showEmployeeDetailsDialog((int) tableModel.getValueAt(row, 0)));
+            return button;
+        });
+
+        resultTable.getColumn("Details").setCellEditor(new DefaultCellEditor(new JCheckBox()) {
+            @Override
+            public Component getTableCellEditorComponent(JTable table, Object value, boolean isSelected, int row, int column) {
+                JButton button = new JButton(value.toString());
+                button.addActionListener(e -> showEmployeeDetailsDialog((int) tableModel.getValueAt(row, 0)));
+                return button;
+            }
+        });
+    }
+
+    private void showEmployeeDetailsDialog(int employeeId) {
+        try {
+            URL url = new URL("http://localhost:8080/employees/" + employeeId + "/details");
+            HttpURLConnection conn = createConnectionWithAuth(url.toString(), "GET");
+
+            if (conn.getResponseCode() == 200) {
+                Scanner scanner = new Scanner(conn.getInputStream()).useDelimiter("\\A");
+                String response = scanner.hasNext() ? scanner.next() : "";
+
+                ObjectMapper mapper = new ObjectMapper();
+                mapper.registerModule(new JavaTimeModule());
+                EmployeeDetailsDto details = mapper.readValue(response, EmployeeDetailsDto.class);
+
+                JDialog detailsDialog = new JDialog(frame, "Employee Details", true);
+                detailsDialog.setSize(800, 600);
+                detailsDialog.setLayout(new BorderLayout());
+
+                JPanel infoPanel = new JPanel(new GridLayout(2, 1));
+                infoPanel.add(new JLabel("Username: " + details.getUsername()));
+                infoPanel.add(new JLabel("Department: " + details.getDepartmentName()));
+
+                JTable pastSalariesTable = createSalariesTable(details.getPastSalaries());
+                JTable upcomingSalariesTable = createUpcomingSalariesTable(details.getUpcomingSalaries());
+
+                JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
+                        new JScrollPane(pastSalariesTable),
+                        new JScrollPane(upcomingSalariesTable));
+
+                splitPane.setDividerLocation(300);
+
+                detailsDialog.add(infoPanel, BorderLayout.NORTH);
+                detailsDialog.add(splitPane, BorderLayout.CENTER);
+
+                detailsDialog.setVisible(true);
+            } else {
+                JOptionPane.showMessageDialog(frame, "Failed to fetch employee details. Error: " + conn.getResponseCode(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private JTable createSalariesTable(List<SalaryDto> salaries) {
+        DefaultTableModel model = new DefaultTableModel(new String[]{"Date", "Amount", "Bonus"}, 0);
+        salaries.forEach(s -> model.addRow(new Object[]{
+                s.getPaymentDate(), s.getAmount(), s.getBonus()
+        }));
+        return new JTable(model);
+    }
+
+    private JTable createUpcomingSalariesTable(List<SalaryDto> salaries) {
+        DefaultTableModel model = new DefaultTableModel(new String[]{"Salary ID", "Date", "Amount", "Bonus", "Action"}, 0);
+        salaries.forEach(s -> model.addRow(new Object[]{
+                s.getId(), // Добавляем идентификатор зарплаты как скрытую колонку
+                s.getPaymentDate(),
+                s.getAmount(),
+                s.getBonus(),
+                "Edit Bonus"
+        }));
+
+        JTable table = new JTable(model);
+
+        table.getColumnModel().getColumn(0).setMinWidth(0);
+        table.getColumnModel().getColumn(0).setMaxWidth(0);
+        table.getColumnModel().getColumn(0).setWidth(0);
+
+        // Настраиваем кнопку "Edit Bonus"
+        table.getColumn("Action").setCellRenderer((tbl, value, isSelected, hasFocus, row, column) -> {
+            JButton button = new JButton(value.toString());
+            button.addActionListener(e -> {
+                int salaryId = (int) model.getValueAt(row, 0); // Берем идентификатор зарплаты из скрытой колонки
+                showEditBonusDialog(salaryId);
+            });
+            return button;
+        });
+
+        table.getColumn("Action").setCellEditor(new DefaultCellEditor(new JCheckBox()) {
+            @Override
+            public Component getTableCellEditorComponent(JTable table, Object value, boolean isSelected, int row, int column) {
+                JButton button = new JButton(value.toString());
+                button.addActionListener(e -> {
+                    int salaryId = (int) model.getValueAt(row, 0); // Берем идентификатор зарплаты из скрытой колонки
+                    showEditBonusDialog(salaryId);
+                });
+                return button;
+            }
+        });
+
+        return table;
+    }
+
+
+    private void showEditBonusDialog(int salaryId) {
+        JDialog editBonusDialog = new JDialog(frame, "Edit Bonus", true);
+        editBonusDialog.setSize(300, 200);
+        editBonusDialog.setLayout(new GridLayout(2, 2));
+
+        JLabel bonusLabel = new JLabel("New Bonus:");
+        JTextField bonusField = new JTextField();
+        JButton submitButton = new JButton("Submit");
+
+        submitButton.addActionListener(e -> {
+            double newBonus = Double.parseDouble(bonusField.getText());
+            updateBonus(salaryId, newBonus);
+            editBonusDialog.dispose();
+        });
+
+        editBonusDialog.add(bonusLabel);
+        editBonusDialog.add(bonusField);
+        editBonusDialog.add(new JLabel());
+        editBonusDialog.add(submitButton);
+
+        editBonusDialog.setVisible(true);
+    }
+
+    private void updateBonus(int salaryId, double bonus) {
+        try {
+            URL url = new URL("http://localhost:8080/employees/salaries/" + salaryId + "/update-bonus?bonus=" + bonus);
+            HttpURLConnection conn = createConnectionWithAuth(url.toString(), "PUT");
+
+            if (conn.getResponseCode() == 200) {
+                JOptionPane.showMessageDialog(frame, "Bonus updated successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(frame, "Failed to update bonus. Error: " + conn.getResponseCode(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+
+
+
+    private void showTransferDialog(int employeeId) {
+        JDialog transferDialog = new JDialog(frame, "Transfer Employee", true);
+        transferDialog.setSize(300, 200);
+        transferDialog.setLayout(new GridLayout(3, 2));
+
+        JLabel departmentLabel = new JLabel("New Department ID:");
+        JTextField departmentField = new JTextField();
+        JButton submitButton = new JButton("Transfer");
+
+        submitButton.addActionListener(e -> {
+            int newDepartmentId = Integer.parseInt(departmentField.getText());
+            transferEmployee(employeeId, newDepartmentId);
+            transferDialog.dispose();
+        });
+
+        transferDialog.add(departmentLabel);
+        transferDialog.add(departmentField);
+        transferDialog.add(new JLabel());
+        transferDialog.add(submitButton);
+
+        transferDialog.setVisible(true);
+    }
+
+    private void transferEmployee(int employeeId, int newDepartmentId) {
+        try {
+            URL url = new URL("http://localhost:8080/employees/" + employeeId + "/transfer");
+            HttpURLConnection conn = createConnectionWithAuth(url.toString(), "PUT");
+            conn.setDoOutput(true);
+
+            String requestBody = String.format("{\"newDepartmentId\":%d}", newDepartmentId);
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(requestBody.getBytes(StandardCharsets.UTF_8));
+            }
+
+            if (conn.getResponseCode() == 200) {
+                JOptionPane.showMessageDialog(frame, "Employee transferred successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+                fetchEmployees(null); // Refresh the table
+            } else {
+                JOptionPane.showMessageDialog(frame, "Failed to transfer employee. Error: " + conn.getResponseCode(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+
+    private void showCreateEmployeeDialog() {
+        JDialog createEmployeeDialog = new JDialog(frame, "Create Employee", true);
+        createEmployeeDialog.setSize(400, 300);
+        createEmployeeDialog.setLayout(new GridLayout(4, 2, 10, 10));
+
+        JTextField usernameField = new JTextField();
+        JPasswordField passwordField = new JPasswordField();
+        JTextField departmentIdField = new JTextField();
+        JButton submitButton = new JButton("Submit");
+
+        submitButton.addActionListener(e -> {
+            String username = usernameField.getText();
+            String password = new String(passwordField.getPassword());
+            int departmentId = Integer.parseInt(departmentIdField.getText());
+            createEmployee(username, password, departmentId);
+            createEmployeeDialog.dispose();
+        });
+
+        createEmployeeDialog.add(new JLabel("Username:"));
+        createEmployeeDialog.add(usernameField);
+        createEmployeeDialog.add(new JLabel("Password:"));
+        createEmployeeDialog.add(passwordField);
+        createEmployeeDialog.add(new JLabel("Department ID:"));
+        createEmployeeDialog.add(departmentIdField);
+        createEmployeeDialog.add(new JLabel());
+        createEmployeeDialog.add(submitButton);
+
+        createEmployeeDialog.setVisible(true);
+    }
+
+    private void createEmployee(String username, String password, int departmentId) {
+        try {
+            URL url = new URL("http://localhost:8080/employees/onboard");
+            HttpURLConnection conn = createConnectionWithAuth(url.toString(), "POST");
+            conn.setDoOutput(true);
+
+            String requestBody = String.format("{\"username\":\"%s\",\"password\":\"%s\",\"departmentId\":%d}",
+                    username, password, departmentId);
+
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(requestBody.getBytes(StandardCharsets.UTF_8));
+            }
+
+            if (conn.getResponseCode() == 200) {
+                JOptionPane.showMessageDialog(frame, "Employee created successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(frame, "Failed to create employee. Error: " + conn.getResponseCode(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
 
     private void fetchAllUsers() {
         try {
@@ -201,91 +830,6 @@ public class SwingAuthApp {
         }
     }
 
-    private void showSearchDialog() {
-        JDialog searchDialog = new JDialog(frame, "Search Books", true);
-        searchDialog.setSize(400, 300);
-        searchDialog.setLayout(new GridLayout(5, 2, 10, 10));
-
-        JTextField titleField = new JTextField();
-        JTextField authorField = new JTextField();
-        JTextField genreField = new JTextField();
-        JTextField isbnField = new JTextField();
-        JButton searchButton = new JButton("Search");
-
-        searchButton.addActionListener(e -> {
-            String title = titleField.getText();
-            String author = authorField.getText();
-            String genre = genreField.getText();
-            String isbn = isbnField.getText();
-            searchBooks(title, author, genre, isbn);
-            searchDialog.dispose();
-        });
-
-        searchDialog.add(new JLabel("Title:"));
-        searchDialog.add(titleField);
-        searchDialog.add(new JLabel("Author:"));
-        searchDialog.add(authorField);
-        searchDialog.add(new JLabel("Genre:"));
-        searchDialog.add(genreField);
-        searchDialog.add(new JLabel("ISBN:"));
-        searchDialog.add(isbnField);
-        searchDialog.add(new JLabel());
-        searchDialog.add(searchButton);
-
-        searchDialog.setVisible(true);
-    }
-
-    private void searchBooks(String title, String author, String genre, String isbn) {
-        try {
-            StringBuilder urlBuilder = new StringBuilder("http://localhost:8080/books/search?");
-            if (!title.isEmpty()) urlBuilder.append("title=").append(URLEncoder.encode(title, StandardCharsets.UTF_8)).append("&");
-            if (!author.isEmpty()) urlBuilder.append("author=").append(URLEncoder.encode(author, StandardCharsets.UTF_8)).append("&");
-            if (!genre.isEmpty()) urlBuilder.append("genre=").append(URLEncoder.encode(genre, StandardCharsets.UTF_8)).append("&");
-            if (!isbn.isEmpty()) urlBuilder.append("isbn=").append(URLEncoder.encode(isbn, StandardCharsets.UTF_8));
-
-            String urlString = urlBuilder.toString().replaceAll("&$", ""); // Удалить последний "&"
-            HttpURLConnection conn = createConnectionWithAuth(urlString, "GET");
-
-            if (conn.getResponseCode() == 200) {
-                Scanner scanner = new Scanner(conn.getInputStream()).useDelimiter("\\A");
-                String response = scanner.hasNext() ? scanner.next() : "";
-
-                ObjectMapper mapper = new ObjectMapper();
-                BookDTO[] books = mapper.readValue(response, BookDTO[].class);
-
-                updateTable(books);
-            } else {
-                JOptionPane.showMessageDialog(frame, "Failed to search books. Error: " + conn.getResponseCode(), "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-
-
-
-
-    private void fetchAllReservations() {
-        try {
-            HttpURLConnection conn = createConnectionWithAuth("http://localhost:8080/admin/reservations", "GET");
-
-            if (conn.getResponseCode() == 200) {
-                Scanner scanner = new Scanner(conn.getInputStream()).useDelimiter("\\A");
-                String response = scanner.hasNext() ? scanner.next() : "";
-
-                ObjectMapper mapper = new ObjectMapper();
-                mapper.registerModule(new JavaTimeModule());
-                ReservationDTO[] reservations = mapper.readValue(response, ReservationDTO[].class);
-
-                updateTable(reservations);
-            } else {
-                JOptionPane.showMessageDialog(frame, "Failed to fetch reservations. Error: " + conn.getResponseCode(), "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
 
     private void showRegisterDialog() {
         JDialog registerDialog = new JDialog(frame, "Register", true);
@@ -371,38 +915,7 @@ public class SwingAuthApp {
         return false;
     }
 
-    private void setupReaderPanel() {
-        buttonPanel.removeAll();
 
-        JButton availableBooksButton = new JButton("Available Books");
-        availableBooksButton.addActionListener(e -> fetchAvailableBooks());
-
-        JButton bookHistoryButton = new JButton("My Book History");
-        bookHistoryButton.addActionListener(e -> fetchUserBookHistory());
-
-        JButton recommendationsButton = new JButton("Recommendations");
-        recommendationsButton.addActionListener(e -> fetchBookRecommendations());
-
-        JButton popularBooksButton = new JButton("Popular Books");
-        popularBooksButton.addActionListener(e -> fetchPopularBooks());
-
-        JButton searchBooksButton = new JButton("Search Books");
-        searchBooksButton.addActionListener(e -> showSearchDialog());
-        buttonPanel.add(searchBooksButton);
-
-
-        JButton myReservationsButton = new JButton("My Reservations");
-        myReservationsButton.addActionListener(e -> fetchUserReservations());
-
-        buttonPanel.add(availableBooksButton);
-        buttonPanel.add(bookHistoryButton);
-        buttonPanel.add(recommendationsButton);
-        buttonPanel.add(popularBooksButton);
-        buttonPanel.add(myReservationsButton);
-
-        buttonPanel.revalidate();
-        buttonPanel.repaint();
-    }
 
     private HttpURLConnection createConnectionWithAuth(String urlString, String method) throws Exception {
         URL url = new URL(urlString);
@@ -413,160 +926,7 @@ public class SwingAuthApp {
         return conn;
     }
 
-    private void fetchAvailableBooks() {
-        fetchBooks("http://localhost:8080/books/available");
-    }
 
-    private void fetchUserBookHistory() {
-        fetchBooks("http://localhost:8080/books/my-history");
-    }
-
-    private void fetchBookRecommendations() {
-        fetchBooks("http://localhost:8080/books/recommendations");
-    }
-
-    private void fetchPopularBooks() {
-        fetchBooks("http://localhost:8080/books/popular");
-    }
-
-    private void fetchUserReservations() {
-        try {
-            HttpURLConnection conn = createConnectionWithAuth("http://localhost:8080/reservations/my", "GET");
-
-            if (conn.getResponseCode() == 200) {
-                Scanner scanner = new Scanner(conn.getInputStream()).useDelimiter("\\A");
-                String response = scanner.hasNext() ? scanner.next() : "";
-
-                ObjectMapper mapper = new ObjectMapper();
-                mapper.registerModule(new JavaTimeModule());
-                ReservationDTO[] reservations = mapper.readValue(response, ReservationDTO[].class);
-
-                updateTable(reservations);
-            } else {
-                JOptionPane.showMessageDialog(frame, "Failed to fetch reservations. Error: " + conn.getResponseCode(), "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void fetchBooks(String urlString) {
-        try {
-            HttpURLConnection conn = createConnectionWithAuth(urlString, "GET");
-
-            if (conn.getResponseCode() == 200) {
-                Scanner scanner = new Scanner(conn.getInputStream()).useDelimiter("\\A");
-                String response = scanner.hasNext() ? scanner.next() : "";
-
-                ObjectMapper mapper = new ObjectMapper();
-                BookDTO[] books = mapper.readValue(response, BookDTO[].class);
-
-                updateTable(books);
-            } else {
-                JOptionPane.showMessageDialog(frame, "Failed to fetch books. Error: " + conn.getResponseCode(), "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void updateTable(BookDTO[] books) {
-        tableModel.setRowCount(0);
-        tableModel.setColumnIdentifiers(new String[]{"ID", "Title", "Author", "Genre", "ISBN", "Available Copies", "Action"});
-
-        for (BookDTO book : books) {
-            tableModel.addRow(new Object[]{
-                    book.getId(),
-                    book.getTitle(),
-                    book.getAuthorName(),
-                    book.getGenreName(),
-                    book.getIsbn(),
-                    book.getAvailableCopies(),
-                    "Reserve"
-            });
-        }
-
-        resultTable.getColumn("Action").setCellRenderer((table, value, isSelected, hasFocus, row, column) -> {
-            JButton button = new JButton(value.toString());
-            button.addActionListener(e -> createReservation((int) tableModel.getValueAt(row, 0)));
-            return button;
-        });
-
-        resultTable.getColumn("Action").setCellEditor(new DefaultCellEditor(new JCheckBox()) {
-            @Override
-            public Component getTableCellEditorComponent(JTable table, Object value, boolean isSelected, int row, int column) {
-                JButton button = new JButton(value.toString());
-                button.addActionListener(e -> createReservation((int) tableModel.getValueAt(row, 0)));
-                return button;
-            }
-        });
-    }
-
-    private void updateTable(ReservationDTO[] reservations) {
-        tableModel.setRowCount(0);
-        tableModel.setColumnIdentifiers(new String[]{"ID", "Book Title", "Reservation Date", "Status", "Action"});
-
-        for (ReservationDTO reservation : reservations) {
-            tableModel.addRow(new Object[]{
-                    reservation.getId(),
-                    reservation.getBookTitle(),
-                    reservation.getReservationDate(),
-                    reservation.getStatus(),
-                    "Cancel"
-            });
-        }
-
-        resultTable.getColumn("Action").setCellRenderer((table, value, isSelected, hasFocus, row, column) -> {
-            JButton button = new JButton(value.toString());
-            button.addActionListener(e -> cancelReservation((int) tableModel.getValueAt(row, 0)));
-            return button;
-        });
-
-        resultTable.getColumn("Action").setCellEditor(new DefaultCellEditor(new JCheckBox()) {
-            @Override
-            public Component getTableCellEditorComponent(JTable table, Object value, boolean isSelected, int row, int column) {
-                JButton button = new JButton(value.toString());
-                button.addActionListener(e -> cancelReservation((int) tableModel.getValueAt(row, 0)));
-                return button;
-            }
-        });
-    }
-
-
-    private void createReservation(int bookId) {
-        try {
-            HttpURLConnection conn = createConnectionWithAuth("http://localhost:8080/reservations", "POST");
-            conn.setDoOutput(true);
-
-            String requestBody = "{\"bookId\":" + bookId + "}";
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(requestBody.getBytes(StandardCharsets.UTF_8));
-            }
-
-            if (conn.getResponseCode() == 201) {
-                JOptionPane.showMessageDialog(frame, "Reservation created successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
-            } else {
-                JOptionPane.showMessageDialog(frame, "Failed to create reservation. Error: " + conn.getResponseCode(), "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void cancelReservation(int reservationId) {
-        try {
-            HttpURLConnection conn = createConnectionWithAuth("http://localhost:8080/reservations/" + reservationId + "/cancel", "POST");
-
-            if (conn.getResponseCode() == 204) {
-                JOptionPane.showMessageDialog(frame, "Reservation canceled successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
-                fetchUserReservations(); // Refresh reservations
-            } else {
-                JOptionPane.showMessageDialog(frame, "Failed to cancel reservation. Error: " + conn.getResponseCode(), "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
 
     static class AuthRequest {
         private String username;

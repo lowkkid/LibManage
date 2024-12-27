@@ -1,34 +1,38 @@
--- Вставка данных в таблицу roles
-INSERT INTO roles (role_name) VALUES ('Администратор');
-INSERT INTO roles (role_name) VALUES ('Библиотекарь');
-INSERT INTO roles (role_name) VALUES ('Читатель');
+-- Вставка ролей
+INSERT INTO roles (role_name)
+VALUES
+    ('Администратор'),
+    ('Сотрудник'),
+    ('Гость');
 
--- Вставка данных в таблицу users
-INSERT INTO users (username, password, role_id) VALUES ('admin', '$2a$10$Dow1NJ1zj6bChE8a7y5nCe7rW6P5Zj1q3zUZk8eIyQKjB4C8eVb1a', 1);
-INSERT INTO users (username, password, role_id) VALUES ('librarian1', '$2a$10$Dow1NJ1zj6bChE8a7y5nCe7rW6P5Zj1q3zUZk8eIyQKjB4C8eVb1a', 2);
-INSERT INTO users (username, password, role_id) VALUES ('reader1', '$2a$10$Dow1NJ1zj6bChE8a7y5nCe7rW6P5Zj1q3zUZk8eIyQKjB4C8eVb1a', 3);
-INSERT INTO users (username, password, role_id) VALUES ('reader2', '$2a$10$Dow1NJ1zj6bChE8a7y5nCe7rW6P5Zj1q3zUZk8eIyQKjB4C8eVb1a', 3);
+-- Вставка пользователей
+INSERT INTO users (username, password, role_id)
+VALUES
+    ('admin', 'admin_pass', 1), -- Администратор
+    ('employee1', 'emp1_pass', 2), -- Сотрудник
+    ('employee2', 'emp2_pass', 2), -- Сотрудник
+    ('guest', 'guest_pass', 3); -- Гость
 
--- Вставка данных в таблицу authors
-INSERT INTO authors (name) VALUES ('Федор Достоевский');
-INSERT INTO authors (name) VALUES ('Лев Толстой');
-INSERT INTO authors (name) VALUES ('Антон Чехов');
+-- Вставка отделов
+INSERT INTO departments (name, manager_id)
+VALUES
+    ('Отдел разработки', 1),
+    ('Отдел продаж', 2);
 
--- Вставка данных в таблицу genres
-INSERT INTO genres (name) VALUES ('Роман');
-INSERT INTO genres (name) VALUES ('Повесть');
-INSERT INTO genres (name) VALUES ('Сказка');
+-- Вставка сотрудников
+INSERT INTO employees (user_id, department_id, salary, hire_date, active)
+VALUES
+    (2, 1, 75000.00, '2023-01-15', TRUE), -- Сотрудник из отдела разработки
+    (3, 2, 50000.00, '2023-03-10', TRUE); -- Сотрудник из отдела продаж
 
--- Вставка данных в таблицу books
-INSERT INTO books (title, author_id, genre_id, isbn, available_copies)
-VALUES ('Преступление и наказание', 1, 1, '978-5-394-15141-6', 3);
-INSERT INTO books (title, author_id, genre_id, isbn, available_copies)
-VALUES ('Война и мир', 2, 1, '978-5-17-080142-6', 2);
-INSERT INTO books (title, author_id, genre_id, isbn, available_copies)
-VALUES ('Вишневый сад', 3, 2, '978-5-389-04927-6', 1);
+-- Вставка зарплат
+INSERT INTO salaries (employee_id, payment_date, amount, bonus)
+VALUES
+    (1, '2023-12-01', 75000.00, 5000.00), -- Зарплата сотрудника 1
+    (2, '2023-12-01', 50000.00, 3000.00); -- Зарплата сотрудника 2
 
--- Вставка данных в таблицу reservations
-INSERT INTO reservations (user_id, book_id, reservation_date, status)
-VALUES (3, 1, '2024-01-10', 'Активное');
-INSERT INTO reservations (user_id, book_id, reservation_date, status)
-VALUES (4, 2, '2024-02-15', 'Выполнено');
+-- Вставка корректировок
+INSERT INTO adjustments (employee_id, adjustment_date, reason, amount)
+VALUES
+    (1, '2023-11-20', 'Годовая премия', 10000.00), -- Корректировка для сотрудника 1
+    (2, '2023-11-15', 'Премия за успешную сделку', 5000.00); -- Корректировка для сотрудника 2

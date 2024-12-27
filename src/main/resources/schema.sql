@@ -1,10 +1,8 @@
--- Таблица ролей
 CREATE TABLE IF NOT EXISTS roles (
                                      id SERIAL PRIMARY KEY,
                                      role_name VARCHAR(50) NOT NULL UNIQUE
 );
 
--- Таблица пользователей
 CREATE TABLE IF NOT EXISTS users (
                                      id SERIAL PRIMARY KEY,
                                      username VARCHAR(50) NOT NULL UNIQUE,
@@ -15,45 +13,34 @@ CREATE TABLE IF NOT EXISTS users (
                                          ON DELETE RESTRICT
 );
 
--- Таблица авторов
-CREATE TABLE IF NOT EXISTS authors (
-                                       id SERIAL PRIMARY KEY,
-                                       name VARCHAR(100) NOT NULL
+CREATE TABLE departments (
+                             id SERIAL PRIMARY KEY,
+                             name VARCHAR(100) NOT NULL UNIQUE,
+                             manager_id INT REFERENCES users(id) ON DELETE SET NULL
 );
 
--- Таблица жанров
-CREATE TABLE IF NOT EXISTS genres (
-                                      id SERIAL PRIMARY KEY,
-                                      name VARCHAR(50) NOT NULL
+CREATE TABLE employees (
+                           id SERIAL PRIMARY KEY,
+                           user_id INT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+                           department_id INT REFERENCES Departments(id) ON DELETE SET NULL,
+                           salary DECIMAL(10, 2) NOT NULL,
+                           hire_date DATE NOT NULL DEFAULT CURRENT_DATE,
+                           active BOOLEAN DEFAULT TRUE
 );
 
--- Таблица книг
-CREATE TABLE IF NOT EXISTS books (
-                                     id SERIAL PRIMARY KEY,
-                                     title VARCHAR(200) NOT NULL,
-                                     author_id INT NOT NULL,
-                                     genre_id INT NOT NULL,
-                                     isbn VARCHAR(20) NOT NULL UNIQUE,
-                                     available_copies INT NOT NULL DEFAULT 0,
-                                     CONSTRAINT fk_author FOREIGN KEY (author_id) REFERENCES authors (id)
-                                         ON UPDATE CASCADE
-                                         ON DELETE RESTRICT,
-                                     CONSTRAINT fk_genre FOREIGN KEY (genre_id) REFERENCES genres (id)
-                                         ON UPDATE CASCADE
-                                         ON DELETE RESTRICT
+CREATE TABLE salaries (
+                          id SERIAL PRIMARY KEY,
+                          employee_id INT NOT NULL REFERENCES Employees(id) ON DELETE CASCADE,
+                          payment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+                          amount DECIMAL(10, 2) NOT NULL,
+                          bonus DECIMAL(10, 2) DEFAULT 0
 );
 
--- Таблица бронирований
-CREATE TABLE IF NOT EXISTS reservations (
-                                            id SERIAL PRIMARY KEY,
-                                            user_id INT NOT NULL,
-                                            book_id INT NOT NULL,
-                                            reservation_date DATE NOT NULL,
-                                            status VARCHAR(50) NOT NULL CHECK (status IN ('Активное', 'Выполнено', 'Отменено')),
-                                            CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users (id)
-                                                ON UPDATE CASCADE
-                                                ON DELETE CASCADE,
-                                            CONSTRAINT fk_book FOREIGN KEY (book_id) REFERENCES books (id)
-                                                ON UPDATE CASCADE
-                                                ON DELETE RESTRICT
+CREATE TABLE adjustments (
+                             id SERIAL PRIMARY KEY,
+                             employee_id INT NOT NULL REFERENCES Employees(id) ON DELETE CASCADE,
+                             adjustment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+                             reason VARCHAR(255),
+                             amount DECIMAL(10, 2) NOT NULL
 );
+

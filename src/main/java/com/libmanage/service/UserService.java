@@ -4,8 +4,10 @@ import com.libmanage.config.CustomAuthenticationToken;
 import com.libmanage.config.RoleGrantedAuthority;
 import com.libmanage.dto.RegisterRequest;
 import com.libmanage.exception.EntityNotFoundException;
-import com.libmanage.model.Role;
+import com.libmanage.model.Employee;
 import com.libmanage.model.User;
+import com.libmanage.repository.DepartmentRepository;
+import com.libmanage.repository.EmployeeRepository;
 import com.libmanage.repository.RoleRepository;
 import com.libmanage.repository.UserRepository;
 import org.slf4j.LoggerFactory;
@@ -15,6 +17,8 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -25,12 +29,16 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final RoleRepository roleRepository;
+    private final EmployeeRepository employeeRepository;
+    private final DepartmentRepository departmentRepository;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, RoleRepository roleRepository) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, RoleRepository roleRepository, EmployeeRepository employeeRepository, DepartmentRepository departmentRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.roleRepository = roleRepository;
 
+        this.employeeRepository = employeeRepository;
+        this.departmentRepository = departmentRepository;
     }
 
 
@@ -46,8 +54,14 @@ public class UserService {
         User user = new User();
         user.setUsername(username);
         user.setPassword(passwordEncoder.encode(password));
-        user.setRole(roleRepository.findByRoleName("Читатель").orElseThrow(() -> new EntityNotFoundException("bad role")));
+        user.setRole(roleRepository.findByRoleName("Сотрудник").orElseThrow(() -> new EntityNotFoundException("bad role")));
         userRepository.save(user);
+        employeeRepository.save(new Employee(
+                true,
+                LocalDate.now(),
+                new BigDecimal("0.0"),
+                departmentRepository.findById(3).orElseThrow(),
+                user));
     }
 
 

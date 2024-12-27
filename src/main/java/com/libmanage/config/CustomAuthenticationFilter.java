@@ -28,10 +28,8 @@ public class CustomAuthenticationFilter extends OncePerRequestFilter {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
         if (auth instanceof AnonymousAuthenticationToken && request.getUserPrincipal() != null) {
-            // Подставьте вашу логику для получения данных пользователя
             String username = request.getUserPrincipal().getName();
 
-            // Получите из базы данных
             User user = userRepository.findByUsername(username)
                     .orElseThrow(() -> new UsernameNotFoundException("User not found"));
             RoleGrantedAuthority authority = new RoleGrantedAuthority("ROLE_" + user.getRole().getRoleName());
