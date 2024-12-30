@@ -140,14 +140,14 @@ public class EmployeeService {
 
         detailsDto.setPastSalaries(
                 pastSalaries.stream()
-                        .map(s -> new SalaryDto(s.id(), s.getPaymentDate(), s.getAmount().doubleValue(), s.getBonus().doubleValue()))
+                        .map(s -> new SalaryDto(s.id(), s.getPaymentDate(), s.getAmount().doubleValue(), s.getBonus() == null ? 0 : s.getBonus().doubleValue()))
                         .collect(Collectors.toList())
         );
 
         upcomingSalaries.forEach(s -> logger.info(s.toString()));
         detailsDto.setUpcomingSalaries(
                 upcomingSalaries.stream()
-                        .map(s -> new SalaryDto(s.id(), s.getPaymentDate(), s.getAmount().doubleValue(), s.getBonus().doubleValue()))
+                        .map(s -> new SalaryDto(s.id(), s.getPaymentDate(), s.getAmount().doubleValue(), s.getBonus() == null ? 0 : s.getBonus().doubleValue()))
                         .collect(Collectors.toList())
         );
 
