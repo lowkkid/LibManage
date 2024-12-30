@@ -194,7 +194,7 @@ public class SwingAuthApp {
                 JOptionPane.showMessageDialog(frame, "Не удалось получить следующую выплату. Код ошибки: " + conn.getResponseCode(), "Ошибка", JOptionPane.ERROR_MESSAGE);
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            JOptionPane.showMessageDialog(frame, "Нет ближайших выплат");
         }
     }
 

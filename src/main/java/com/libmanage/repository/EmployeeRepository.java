@@ -3,6 +3,7 @@ package com.libmanage.repository;
 import com.libmanage.dto.EmployeeDto;
 import com.libmanage.model.Employee;
 import com.libmanage.model.User;
+import org.hibernate.annotations.processing.SQL;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -46,5 +47,6 @@ public interface EmployeeRepository extends JpaRepository<Employee, Integer> {
     @Query("UPDATE Employee e SET e.salary = e.salary * :adjustmentFactor WHERE e.department.id = :departmentId")
     void adjustSalariesByDepartment(Integer departmentId, Double adjustmentFactor);
 
-    Employee findEmployeeByUser(User user);
+    @Query(value = "SELECT id FROM employees WHERE user_id = :userId", nativeQuery = true)
+    Integer findEmployeeIdByUser(@Param("userId") Integer userId);
 }

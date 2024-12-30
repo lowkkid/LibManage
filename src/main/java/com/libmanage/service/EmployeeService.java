@@ -22,6 +22,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,17 +42,19 @@ public class EmployeeService {
     private final EmployeeTransferLogRepository transferLogRepository;
     private final RoleRepository roleRepository;
     private final SalaryRepository salaryRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public EmployeeService(UserRepository userRepository,
                            EmployeeRepository employeeRepository,
                            DepartmentRepository departmentRepository,
-                           EmployeeTransferLogRepository transferLogRepository, RoleRepository roleRepository, SalaryRepository salaryRepository) {
+                           EmployeeTransferLogRepository transferLogRepository, RoleRepository roleRepository, SalaryRepository salaryRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.employeeRepository = employeeRepository;
         this.departmentRepository = departmentRepository;
         this.transferLogRepository = transferLogRepository;
         this.roleRepository = roleRepository;
         this.salaryRepository = salaryRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Transactional
@@ -63,8 +66,8 @@ public class EmployeeService {
         // Create User
         User user = new User();
         user.setUsername(request.getUsername());
-        user.setPassword(request.getPassword());
-        user.setRole(roleRepository.findByRoleName("Сотрудник").orElseThrow(() ->new EntityNotFoundException("No such role"))); // Assuming Role is an Enum
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setRole(roleRepository.findByRoleName("Сотрудник").orElseThrow(() -> new EntityNotFoundException("No such role"))); // Assuming Role is an Enum
         userRepository.save(user);
 
         // Determine Base Salary
@@ -178,9 +181,10 @@ public class EmployeeService {
 
     private Integer getCurrentEmployeeId() {
         Integer currentUserId = getCurrentUserId();
-        Integer employeeId = employeeRepository.findEmployeeByUser(
-                userRepository.findById(currentUserId).orElseThrow(() -> new EntityNotFoundException("User not found"))
-        ).id();
+        logger.info(currentUserId.toString());
+        User user = userRepository.findById(currentUserId).orElseThrow(() -> new EntityNotFoundException("User not found"));
+        logger.info(user.toString());
+        Integer employeeId = employeeRepository.findEmployeeIdByUser(currentUserId);
         return employeeId;
     }
 
